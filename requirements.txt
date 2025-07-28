@@ -1,1 +1,6 @@
 streamlit
+matplotlib
+pandas
+sqlite3
+numpy
+python-dateutil
