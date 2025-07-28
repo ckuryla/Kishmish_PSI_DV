@@ -23,7 +23,6 @@ def load_data():
         conn.close()
 
 def plot_url_metrics(url_data, url, strategy):
-    """Create a separate plot for each URL showing all selected metrics"""
     if not url_data.empty and selected_metrics:
         fig, ax = plt.subplots(figsize=(10, 5))
         
@@ -48,11 +47,10 @@ def plot_url_metrics(url_data, url, strategy):
         st.pyplot(fig)
 
 def display_url_metrics(data, selected_urls):
-    """Show performance averages for each URL in columns"""
     if not selected_urls or not selected_metrics:
         return
     
-    st.header("Performance Averages by URL")
+    st.header("Performance Averages")
     
     # Create columns for each URL
     url_cols = st.columns(len(selected_urls))
@@ -130,7 +128,7 @@ def main():
     display_url_metrics(data, selected_urls)
     
     # Separate graphs for each URL
-    st.header("Performance Trends by URL")
+    st.header("Performance Charts")
     if selected_urls and selected_metrics:
         for url in selected_urls:
             url_data = data[data['url'] == url]
