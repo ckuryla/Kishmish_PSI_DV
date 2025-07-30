@@ -4,12 +4,25 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+import os
+
+# CONFIG
+DEFAULT_DB_PATH = "pagespeed.db"
+DB_PATH = os.getenv("PAGESPEED_DB_PATH", DEFAULT_DB_PATH) #EASY CUSTOMIZATION
+CACHE_TTL = 3600  # 1 hour (always in seconds)
 
 def get_db_connection():
-    return sqlite3.connect('pagespeed.db', check_same_thread=False)
+    """CONNECT TO DB"""
+    try:
+        return sqlite3.connect(DB_PATH, check_same_thread=False)
+    except sqlite3.Error as e:
+        st.error(f"Database connection failed: {str(e)}")
+        st.error(f"Tried path: {DB_PATH}")
+        st.stop()
 
-@st.cache_data
+@st.cache_data(ttl=CACHE_TTL, show_spinner="Loading...")
 def load_data():
+    """LOAD DATA FROM DB CONNECTION"""
     conn = get_db_connection()
     try:
         data = pd.read_sql("SELECT * FROM pagespeed_results", conn)
@@ -19,10 +32,14 @@ def load_data():
             data['datetime'] = pd.to_datetime(data['poll_time'], unit='s')
             
         return data
+    except Exception as e:
+        st.error(f"Data loading error: {str(e)}")
+        return pd.DataFrame()
     finally:
         conn.close()
 
 def plot_url_metrics(url_data, url, strategy):
+    """PLOT METRICS FOR A SPECIFIC URL"""
     if not url_data.empty and selected_metrics:
         fig, ax = plt.subplots(figsize=(10, 5))
         
@@ -47,12 +64,11 @@ def plot_url_metrics(url_data, url, strategy):
         st.pyplot(fig)
 
 def display_url_metrics(data, selected_urls):
+    """URL GRID FOR COLUMN METRIC AVERAGES"""
     if not selected_urls or not selected_metrics:
         return
     
-    st.header("Performance Averages")
-    
-    # Create columns for each URL
+    st.header("Performance Averages by URL")
     url_cols = st.columns(len(selected_urls))
     
     for i, url in enumerate(selected_urls):
@@ -71,16 +87,28 @@ def display_url_metrics(data, selected_urls):
 def main():
     st.title("Pagespeed Insights Visualizer")
     
+    # BUTTON TO RELOAD DATA
+    if st.button("Reload Data"):
+        st.cache_data.clear()
+        st.rerun()
+    
+    # Show current configuration DEBUG INFO
+    # st.sidebar.header("Configuration Info")
+    # st.sidebar.write(f"Database path: `{DB_PATH}`")
+    # st.sidebar.write(f"Cache TTL: {CACHE_TTL} seconds ({(CACHE_TTL/60):.1f} minutes)")
+    # if DB_PATH == DEFAULT_DB_PATH:
+    #     st.sidebar.info("Using default database path. Set PAGESPEED_DB_PATH environment variable to customize.")
+    
     data = load_data()
     
     if data.empty:
-        st.warning("Could not find db data.")
+        st.warning("No data loaded. Please check your database configuration.")
         st.stop()
     
-    # Sidebar
+    # Sidebar 
     st.sidebar.header("Filters")
     
-    # Date
+    # Date 
     if 'datetime' in data.columns:
         min_date = data['datetime'].min().to_pydatetime().date()
         max_date = data['datetime'].max().to_pydatetime().date()
@@ -97,26 +125,26 @@ def main():
             end_date = pd.to_datetime(selected_dates[1]) + pd.Timedelta(days=1)
             data = data[data['datetime'].between(start_date, end_date)]
     
-    # URL
+    # URL 
     if 'url' in data.columns:
         urls = data['url'].unique().tolist()
         selected_urls = st.sidebar.multiselect(
             "URLs to analyze",
             options=urls,
-            default=urls[:1] 
+            default=urls[:2]
         )
         data = data[data['url'].isin(selected_urls)]
     
-    # Metric
+    # Metrics 
     available_metrics = [col for col in ['performance','fcp', 'lcp', 'cls'] if col in data.columns]
     global selected_metrics
     selected_metrics = st.sidebar.multiselect(
         "Metrics to display",
         options=available_metrics,
-        default=available_metrics[:1] 
+        default=available_metrics[:2]
     )
     
-    # Strategy
+    # Strategy 
     if 'strategy' in data.columns:
         selected_strategy = st.sidebar.radio(
             "Device strategy",
@@ -125,10 +153,11 @@ def main():
         )
         data = data[data['strategy'] == selected_strategy]
     
+    # Display metrics
     display_url_metrics(data, selected_urls)
     
-    # Separate graphs for each URL
-    st.header("Performance Charts")
+    # SEPARATE GRAPH FOR EACH URL
+    st.header("Performance Trends by URL")
     if selected_urls and selected_metrics:
         for url in selected_urls:
             url_data = data[data['url'] == url]
